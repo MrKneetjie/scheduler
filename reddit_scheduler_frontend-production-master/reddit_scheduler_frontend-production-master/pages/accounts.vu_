@@ -1,0 +1,157 @@
+<template>
+  <div>
+  <v-dialog
+    v-model="addUpdateDialog"
+    width="500"
+  >
+    <v-card>
+      <v-card-title
+        class="headline grey lighten-2"
+        primary-title
+      >
+        Account
+      </v-card-title>
+
+      <v-card-text>
+        <v-text-field
+          v-model="editedAccount.username"
+          label="Username"
+        ></v-text-field>
+        <v-text-field
+          v-model="editedAccount.password"
+          label="Password"
+        ></v-text-field>
+        <v-text-field
+          v-model="editedAccount.clientId"
+          label="Client Id"
+        ></v-text-field>
+        <v-text-field
+          v-model="editedAccount.clientSecret"
+          label="Client Secret"
+        ></v-text-field>
+      </v-card-text>
+
+      <v-divider></v-divider>
+
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn
+          color="grey"
+          text
+          @click="addUpdateDialog = false"
+        >
+          Cancel
+        </v-btn>
+        <v-btn
+          color="primary"
+          text
+          @click="addUpdate"
+        >
+          Save
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog> 
+
+  <v-simple-table class="acc-table">
+    <template v-slot:top>
+      <v-toolbar dense flat>
+        <v-spacer></v-spacer>
+        <template>
+          <v-btn icon @click="showAddUpdate(false)">
+            <v-icon>mdi-plus-circle</v-icon>
+          </v-btn>
+          <v-btn icon @click="showAddUpdate(true)">
+            <v-icon>mdi-dots-horizontal-circle</v-icon>
+          </v-btn>
+          <v-btn icon @click="deleteAccount">
+            <v-icon>mdi-delete-circle</v-icon>
+          </v-btn>
+        </template>
+      </v-toolbar> 
+    </template>
+    <template v-slot:default>
+      <thead>
+        <tr>
+          <th class="text-left">Username</th>
+          <th class="text-left">Password</th>
+          <th class="text-left">User Id</th>
+          <th class="text-left">User Secret</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="item in accountsList" :key="item.id" @click="rowClick(item)" :class="rowSelected(item)">
+          <td>{{ item.username }}</td>
+          <td>{{ item.password }}</td>
+          <td>{{ item.clientId}}</td>
+          <td>{{ item.clientSecret}}</td>
+        </tr>
+      </tbody>
+    </template>
+  </v-simple-table>
+</div>
+  
+</template>
+
+<script>
+
+import AccountsMixin from '@/mixins/AccountsMixin';
+
+export default {
+
+  layout: 'dashboard',
+  mixins: [ AccountsMixin ],
+
+  data(){
+    return {
+      addUpdateDialog: false,
+      selectedAccount: {},
+      editedAccount: {}
+    }
+  },
+
+  methods: {
+
+    rowClick(account){
+      if(this.selected.id !== account.id)
+        this.selected = this.accountsList.filter(acc => acc.id === account.id)[0];
+      else
+        this.selected = {};
+    },
+
+    showAddUpdate(update){
+      if(!update)
+        this.edited = {};
+      else
+        this.edited = {...this.selected};
+      if(update && !this.selected.id)
+        return;      
+      this.addUpdateDialog = true;
+    },
+
+    deleteAccount(){
+
+    },
+
+    addUpdate(){
+      let accFn = null;
+      if(this.edited.id)
+        accFn = apiUpdateAccount(this.edited);
+      else
+        accFn = this.createAccount(this.edited);
+      fn
+      .then(res => {
+        this.storeAddUpdateAccount(res.data, this.edited.id);
+        this.selected = {};
+      })
+      .catch(err => console.log(err));
+      this.addUpdateDialog = false;
+    },
+    addUpdate(){
+
+    }
+
+  }
+}
+
+</script>

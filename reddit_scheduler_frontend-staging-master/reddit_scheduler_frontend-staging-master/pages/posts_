@@ -1,0 +1,288 @@
+<template>
+  <div>
+    <message/>
+    <post-add-update-dialog 
+      :display="addUpdateDialog" 
+      :accounts="accounts"
+      :addUpdate="addUpdate"
+      :post="getActivePost" 
+      :close="closeAddUpdateDialog"
+      :editNext="editNext"
+      persistent
+    />
+    <v-simple-table class="acc-table">
+      <template v-slot:top>
+        <v-toolbar dense flat class="sticky-table-header">
+          <template>
+            <v-btn icon @click="openAddUpdateDialog">
+              <v-icon>{{addButtonIcon}}</v-icon>
+            </v-btn>
+            <v-btn icon @click="addUpdateDialog = true" :disabled="actionsDisabled">
+              <v-icon>mdi-dots-horizontal-circle</v-icon>
+            </v-btn>
+            <v-btn icon @click="deletePost" :disabled="actionsDisabled">
+              <v-icon>mdi-delete-circle</v-icon>
+            </v-btn>
+            <v-spacer></v-spacer>
+            <v-pagination
+              v-model="page"
+              :length="Math.ceil(pagination.total / pagination.limit)"
+              :value="Math.floor(pagination.skip / pagination.limit)"
+              @input="paginationChanged"
+              circle
+              dark
+            ></v-pagination>
+            <v-spacer></v-spacer>
+            <v-text-field
+              absolute
+              dense
+              outlined
+              filled
+              label="Search label"
+              v-model="labelQuery"
+              append-outer-icon="mdi-magnify"
+              @click:append-outer="searchLabel"
+              class="search-label-input"
+            ></v-text-field>
+          </template>
+        </v-toolbar> 
+      </template>
+      <template v-slot:default>
+        <thead>
+          <tr>
+            <th class="text-left">Created</th>
+            <th class="text-left">Label</th>
+            <th class="text-left">Account</th>
+            <th class="text-left">Title</th>
+            <th class="text-left">Image</th>
+            <th class="text-left">Subreddit</th>
+            <th class="text-left">Scheduled At</th>
+            <th class="text-left">Posted</th>
+            <th class="text-left">Submission Id</th>
+            <th class="text-left">Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in posts" :key="item._id" @click="rowClick(item)" :class="rowSelected(item)">
+            <td> {{ $moment(item.createdAt).format('MMM Do YYYY, h:mm a') }}</td>
+            <td>{{ item.label }}</td>
+            <td>{{ item.account ? item.account.username : "deleted" }}</td>
+            <td>{{ item.title }}</td>
+            <td><img :src="item.imageUrl" height="77"/></td>
+            <td>{{ item.subreddit }}</td>
+            <td>{{ $moment(item.postAt).format('MMM Do YYYY, h:mm a') }}</td>
+            <td>{{ item.posted ? 'Yes' : 'No'}}</td>
+            <td><a :href="postUrl(item)" target="_blank">{{ item.submissionName }}</a></td>
+            <td>{{ item.error }}</td>
+          </tr>
+        </tbody>
+      </template>
+    </v-simple-table>
+</div>
+  
+</template>
+
+<script>
+import { makeFindMixin } from 'feathers-vuex';
+import Message from '@/components/Message';
+import PostAddUpdateDialog from '@/components/PostAddUpdateDialog';
+
+const defaultPost = { postAt: new Date() };
+export default {
+
+  layout: 'dashboard_topbar',
+  components: { PostAddUpdateDialog, Message },
+
+  //middleware: [ 'nonadmin' ],
+
+  mixins: [ 
+    makeFindMixin({ service: 'accounts' }),
+    makeFindMixin({ service: 'posts', watch: 'skip' }),
+  ],
+
+  computed: {
+
+    getActivePost(){
+      const { Post } = this.$FeathersVuex.api;
+      if(this.activePost)
+        return this.activePost.clone();
+      return new Post({}).clone();
+    },
+    
+    accountsParams(){
+      return { query: {} };
+    },
+
+    postsParams(){
+      return { query: this.postQuery, paginate: true, qid: 'postsPagination' };
+    },
+
+    postQuery(){
+      const sort = {
+        $sort: {
+          createdAt: -1
+        },
+        $limit: 10,
+        $skip: this.skip 
+      };
+      if(this.labelQuery && this.labelQuery.length > 0)
+        return { 
+          label: {
+            $regex: new RegExp(this.labelQuery, 'i')
+          },
+          ...sort
+        }
+      return {...sort};
+    },
+
+    actionsDisabled(){
+      if(this.activePost && this.activePost._id)
+        return false;
+      return true;
+    },
+
+    addButtonIcon(){
+      if(this.activePost)
+        return 'mdi-checkbox-multiple-blank-circle';
+      return 'mdi-plus-circle';
+    },
+
+    pagination() {
+      if(!this.postsPaginationData.postsPagination)
+        return { 
+          skip: 0,
+          limit: 10,
+          total: 10
+        };
+      const mostRecent = this.postsPaginationData.postsPagination.mostRecent;
+      return {
+        total: mostRecent.total,
+        limit: mostRecent.pageParams.$limit,
+        skip: mostRecent.pageParams.$skip
+      };
+    }
+  },
+
+  data(){
+    return {
+      activePost: false,
+      addUpdateDialog: false,
+      labelQuery: '',
+      editNext: false,
+      page: 1,
+      skip: 0
+    }
+  },
+
+  methods: {
+
+    paginationChanged(newVal){
+      this.skip = (newVal - 1) * this.pagination.limit;
+    },
+
+    searchLabel(){
+      console.log('searching: ' + this.labelQuery);
+    },
+
+    findPostById(id){
+      return this.posts.filter(post => post._id === id)[0];
+    },
+
+    rowClick(post){
+      if(!this.activePost || (this.activePost._id !== post._id))
+        this.activePost = post;
+      else
+        this.activePost = false;
+    },
+
+    rowSelected(item){
+      if(!this.activePost || (this.activePost._id !== item._id))
+        return "";
+      return "grey darken-2";
+    },
+
+    postDuplicate(post){
+      const { Post } = this.$FeathersVuex.api;
+      const copy = { ...post };
+      delete copy._id;
+      delete copy.__id;
+      delete copy.submissionName;
+      delete copy.posted;
+      delete copy.createdAt;
+      delete copy.updatedAt;
+      return new Post(copy);
+    },
+
+    openAddUpdateDialog(){
+      const { Post } = this.$FeathersVuex.api;
+      if(this.activePost)
+        this.activePost = this.postDuplicate(this.activePost);
+      this.addUpdateDialog = true;
+    },
+
+    postUrl(post){
+      const postId = post.submissionName.split('_')[1];
+      return `https://reddit.com${post.subreddit}/comments/${postId}`;
+    },
+
+    closeAddUpdateDialog(){
+      this.addUpdateDialog = false;
+      this.activePost = false;
+      this.editNext = false;
+    },
+
+    deletePost(){
+      if(!this.activePost)
+        return;
+      this.activePost.remove({});
+      this.activePost = false;
+    },
+
+    addUpdate(post, editNext){
+      if(!editNext)
+        this.closeAddUpdateDialog();
+      post.commit();
+      return post.save()
+        .then(post => {
+          if(editNext){
+            this.activePost = this.postDuplicate(post);
+            this.editNext = editNext;
+          }
+          else {
+            this.activePost = false;
+            this.editNext = false;
+          }
+        })
+        .catch(err => {
+          this.$store.commit('showMessage', { type: 'error', text: err.message });
+        });
+    },
+
+
+  },
+
+    mounted(){
+      console.log(this.pagination);
+    }
+
+}
+
+</script>
+
+<style scoped>
+
+tr {
+  height: 77px;
+}
+
+.search-label-input {
+  margin-top: 25px;
+  max-width: 300px;
+}
+
+.sticky-table-header {
+  position: sticky;
+  top: 60px;
+}
+
+</style>
